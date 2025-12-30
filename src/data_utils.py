@@ -80,4 +80,5 @@ def process_text():
     print(f'Тестовый набор сохранен в: {test_file}')
 
 
-process_text()
+if __name__ == '__main__':
+    process_text()

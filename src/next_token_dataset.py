@@ -6,7 +6,7 @@ from transformers import AutoTokenizer
 
 
 class TweetDataset(Dataset):
-    def __init__(self, input_ids, max_len, split_ratio=0.75):
+    def __init__(self, input_ids, max_len=512, split_ratio=0.75):
         """
         Args:
             input_ids: токенизированные тексты
@@ -56,19 +56,14 @@ def collate_fn(batch):
     }
 
 
-def create_dataloader(texts, split_ratio=0.75):
-    model_name = 'bert-base-uncased'
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-    # Добавляем специальные токены для начала/конца
-    tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-
+def create_dataloader(texts, tokenizer, split_ratio=0.75):
     tokenized_texts = tokenizer(
         texts.tolist(),
         truncation=True,
         padding=False,
         return_tensors=None,
         add_special_tokens=True,  # Добавляем [CLS] и [SEP]
+
     )
 
     dataset = TweetDataset(
@@ -77,7 +72,7 @@ def create_dataloader(texts, split_ratio=0.75):
         split_ratio=split_ratio,
     )
 
-    batch_size = 64
+    batch_size = 256
 
     dataloader = DataLoader(
         dataset,
@@ -111,11 +106,17 @@ def create_dataloader(texts, split_ratio=0.75):
             print(f"Цель: {label_text}")
         break
 
-    return dataloader, tokenizer
+    return dataloader
 
 
 if __name__ == '__main__':
     data = pd.read_csv('../data/val.csv')
     texts = data['tweet'] if 'tweet' in data.columns else data.iloc[:, 0]
 
-    dataloader = create_dataloader(texts)
+    model_name = 'bert-base-uncased'
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+    # Добавляем специальные токены для начала/конца
+    tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+
+    dataloader = create_dataloader(texts, tokenizer)
