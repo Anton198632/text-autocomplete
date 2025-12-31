@@ -122,5 +122,6 @@ class SimpleLSTM(nn.Module):
                 current_ids = torch.cat(
                     [current_ids[:, 1:], next_token], dim=1,
                 )
+                ...
 
         return all_ids

@@ -5,6 +5,33 @@ from torch.utils.data import DataLoader, Dataset
 from transformers import AutoTokenizer
 
 
+def split_tokens(tokens):
+    """
+    Разделяет токены на input и target sequences
+
+    Пример: [101, 3423, 434, 334, 3456, 102] ->
+        input_tokens = [3423, 434, 334]
+        target_tokens = [434, 334, 3456]
+    """
+    if len(tokens) < 3:
+        raise ValueError("Слишком мало токенов для разделения")
+
+    # Берем все токены кроме первого и последнего
+    middle_tokens = tokens[1:-1]
+
+    if len(middle_tokens) < 2:
+        middle_tokens = [*middle_tokens, *middle_tokens]
+        # raise ValueError("Недостаточно средних токенов")
+
+    # Для input: все средние кроме последнего
+    input_tokens = middle_tokens[:-1]
+
+    # Для target: все средние кроме первого
+    target_tokens = middle_tokens[1:]
+
+    return input_tokens, target_tokens
+
+
 class TweetDataset(Dataset):
     def __init__(self, input_ids, max_len=512, split_ratio=0.75):
         """
@@ -21,26 +48,21 @@ class TweetDataset(Dataset):
         return len(self.input_ids)
 
     def __getitem__(self, idx):
-        sequence = self.input_ids[idx][:self.max_len]
-        split_point = int(len(sequence) * self.split_ratio)
+        tokens = self.input_ids[idx]
 
-        # Входная часть
-        input_part = sequence[:split_point]
-        # Целевая часть
-        target_part = sequence[split_point:]  # Для дополнения текста
+        input_tokens, target_tokens = split_tokens(tokens)
 
         return {
-            'input_ids': torch.tensor(input_part, dtype=torch.long),
-            'labels': torch.tensor(target_part, dtype=torch.long),
+            'input_tokens': torch.tensor(input_tokens, dtype=torch.long),
+            'target_tokens': torch.tensor(target_tokens, dtype=torch.long),
         }
 
 
 def collate_fn(batch):
-    inputs = [item['input_ids'] for item in batch]
-    labels = [item['labels'] for item in batch]
+    inputs = [item['input_tokens'] for item in batch]
+    labels = [item['target_tokens'] for item in batch]
 
     # Паддинг для входов
-    input_lengths = torch.tensor([len(seq) for seq in inputs])
     padded_inputs = pad_sequence(inputs, batch_first=True, padding_value=0)
     input_masks = (padded_inputs != 0).long()
 
@@ -52,7 +74,7 @@ def collate_fn(batch):
         'input_ids': padded_inputs,
         'attention_mask': input_masks,
         'labels': padded_labels,
-        'lengths': input_lengths,
+
     }
 
 
@@ -89,7 +111,6 @@ def create_dataloader(texts, tokenizer, split_ratio=0.75):
         print('input_ids shape:', batch['input_ids'].shape)
         print('attention_mask shape:', batch['attention_mask'].shape)
         print('labels shape:', batch['labels'].shape)
-        print('lengths shape:', batch['lengths'].shape)
 
         # Пример первых двух последовательностей
         print('\nПример данных (первые 2 элемента батча):')
@@ -115,8 +136,5 @@ if __name__ == '__main__':
 
     model_name = 'bert-base-uncased'
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-    # Добавляем специальные токены для начала/конца
-    tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
     dataloader = create_dataloader(texts, tokenizer)

@@ -7,7 +7,7 @@ from transformers import AutoTokenizer
 
 from src.eval_lstm import evaluate_with_rouge, generate_text
 from src.lstm_model import SimpleLSTM
-from src.lstm_train import train_model_with_rouge, train_model_with_rouge_v2
+from src.lstm_train import train_model_with_rouge
 from src.next_token_dataset import create_dataloader
 
 
@@ -60,7 +60,7 @@ if __name__ == '__main__':
     print(f"  Размер словаря: {vocab_size}")
 
     # Обучаем модель
-    trained_model, history = train_model_with_rouge_v2(
+    trained_model, history = train_model_with_rouge(
         model=model,
         train_dataloader=train_dataloader,
         val_dataloader=val_dataloader,
