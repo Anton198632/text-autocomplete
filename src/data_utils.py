@@ -1,5 +1,3 @@
-# : T201
-
 import re
 
 import pandas as pd
@@ -7,10 +5,10 @@ from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 
-def process_text():
+def process_text(work_dir):
     cleaned_tweets = []
 
-    with open('../data/tweets.txt', 'r') as f:
+    with open(f'{work_dir}tweets.txt', 'r') as f:
         tweets = f.readlines()
 
         print('Обработка текста...')
@@ -26,7 +24,9 @@ def process_text():
 
     df = pd.DataFrame({'tweet': cleaned_tweets})
 
-    df.to_csv('../data/dataset_processed.csv', index=False, encoding='utf-8')
+    df.to_csv(
+        f'{work_dir}dataset_processed.csv', index=False, encoding='utf-8',
+    )
 
     # Случайное перемешивание данных
     print('\nПеремешиваем данные...')
@@ -65,20 +65,50 @@ def process_text():
     print('\nСохраняем разделенные датасеты...')
 
     # Тренировочный набор
-    train_file = '../data/train.csv'
+    train_file = f'{work_dir}train.csv'
     train_df.to_csv(train_file, index=False, encoding='utf-8')
     print(f'Тренировочный набор сохранен в: {train_file}')
 
     # Валидационный набор
-    val_file = '../data/val.csv'
+    val_file = f'{work_dir}val.csv'
     val_df.to_csv(val_file, index=False, encoding='utf-8')
     print(f'Валидационный набор сохранен в: {val_file}')
 
     # Тестовый набор
-    test_file = '../data/test.csv'
+    test_file = f'{work_dir}test.csv'
     test_df.to_csv(test_file, index=False, encoding='utf-8')
     print(f'Тестовый набор сохранен в: {test_file}')
 
 
+def split_text_3_4(text, tokenizer):
+    # Разбиваем текст на слова
+    words = text.split()
+    split_point = len(words) * 3 // 4
+
+    # Формируем промпт и таргет
+    prompt = ' '.join(words[:split_point])
+    target = ' '.join(words[split_point:])
+
+    # Токенизируем и считаем токены
+    prompt_tokens = tokenizer(
+        prompt, return_tensors='pt', add_special_tokens=False,
+    )['input_ids'][0]
+    target_tokens = tokenizer(
+        target, return_tensors='pt', add_special_tokens=False,
+    )['input_ids'][0]
+
+    prompt_token_count = len(prompt_tokens)
+    target_token_count = len(target_tokens)
+    total_token_count = prompt_token_count + target_token_count
+
+    return {
+        'prompt': prompt,
+        'target': target,
+        'prompt_tokens': prompt_token_count,
+        'target_tokens': target_token_count,
+        'total_tokens': total_token_count,
+    }
+
+
 if __name__ == '__main__':
-    process_text()
+    process_text('../data/')

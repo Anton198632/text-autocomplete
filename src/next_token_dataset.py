@@ -14,7 +14,7 @@ def split_tokens(tokens):
         target_tokens = [434, 334, 3456]
     """
     if len(tokens) < 3:
-        raise ValueError("Слишком мало токенов для разделения")
+        raise ValueError('Слишком мало токенов для разделения')
 
     # Берем все токены кроме первого и последнего
     middle_tokens = tokens[1:-1]

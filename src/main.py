@@ -1,34 +1,22 @@
 import os
+import random
 
 import pandas as pd
 import torch
-from torch import nn
 from transformers import AutoTokenizer
 
-from src.eval_lstm import evaluate_with_rouge, generate_text
+from src.data_utils import split_text_3_4
+from src.eval_lstm import generate_and_evaluate
 from src.lstm_model import SimpleLSTM
 from src.lstm_train import train_model_with_rouge
 from src.next_token_dataset import create_dataloader
 
-
 if __name__ == '__main__':
+    data_dir = '../data/'
+
     # Создаем директорию для чекпоинтов
-    save_directory = "checkpoints"
+    save_directory = 'checkpoints'
     os.makedirs(save_directory, exist_ok=True)
-
-    print('Загрузка тренировочного датасета...')
-    train_data = pd.read_csv('../data/train.csv')
-    train_texts = (
-        train_data['tweet'] if 'tweet' in train_data.columns
-        else train_data.iloc[:, 0]
-    )
-
-    print('Загрузка валидационного датасета...')
-    val_data = pd.read_csv('../data/val.csv')
-    val_texts = (
-        val_data['tweet'] if 'tweet' in val_data.columns
-        else val_data.iloc[:, 0]
-    )
 
     # Загружаем токенизатор
     print('Загрузка токенизатора...')
@@ -36,6 +24,25 @@ if __name__ == '__main__':
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     # Добавляем специальные токены для начала/конца
     tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+
+    print('Загрузка тренировочного датасета...')
+    train_data = pd.read_csv(f'{data_dir}train.csv')
+    train_texts = (
+        train_data['tweet'] if 'tweet' in train_data.columns
+        else train_data.iloc[:, 0]
+    )
+
+    print('Загрузка валидационного датасета...')
+    val_data = pd.read_csv(f'{data_dir}val.csv')
+    val_texts = (
+        val_data['tweet'] if 'tweet' in val_data.columns
+        else val_data.iloc[:, 0]
+    )
+
+    print('Загрузка тестового датасета...')
+    test_data = pd.read_csv(f'{data_dir}val.csv')
+    texts = test_data['tweet'].dropna().tolist()
+    selected_texts = random.sample(texts, 10)
 
     # Создаем Dataloader'ы
     print('Создание даталоадеров...')
@@ -52,18 +59,19 @@ if __name__ == '__main__':
         vocab_size=vocab_size,
         embedding_dim=128,
         hidden_dim=256,
-        num_layers=2
+        num_layers=2,
     )
 
-    print(f"\nМодель создана:")
-    print(f"  Параметров: {sum(p.numel() for p in model.parameters()):,}")
-    print(f"  Размер словаря: {vocab_size}")
+    print('\nМодель создана: ')
+    print(f'  Параметров: {sum(p.numel() for p in model.parameters()):,}')
+    print(f'  Размер словаря: {vocab_size}')
 
     # Обучаем модель
     trained_model, history = train_model_with_rouge(
         model=model,
         train_dataloader=train_dataloader,
         val_dataloader=val_dataloader,
+        selected_texts=selected_texts,
         tokenizer=tokenizer,
         device=device,
         num_epochs=5,
@@ -76,36 +84,19 @@ if __name__ == '__main__':
     history.plot_training_history()
 
     # Финальная оценка
-    print("\n" + "=" * 60)
-    print("Финальная оценка модели:")
-    print("=" * 60)
+    print('\n' + '=' * 60)
+    print('Финальная оценка модели:')
+    print('=' * 60)
 
-    final_val_loss, final_val_rouge = evaluate_with_rouge(
-        trained_model,
-        val_dataloader,
-        tokenizer,
-        device,
-        criterion=nn.CrossEntropyLoss(ignore_index=-100)
+    prompts = []
+    references = []
+    for text in selected_texts:
+        split_data = split_text_3_4(text, tokenizer)
+        prompts.append(split_data['prompt'])
+        references.append(split_data['target'])
+
+    results = generate_and_evaluate(
+        model, tokenizer, prompts, references, device,
     )
-
-    print(f"Val Loss: {final_val_loss:.4f}")
-    print(f"Val ROUGE-1: {final_val_rouge['rouge1']:.3f}")
-    print(f"Val ROUGE-2: {final_val_rouge['rouge2']:.3f}")
-    print(f"Val ROUGE-L: {final_val_rouge['rougeL']:.3f}")
-
-    # Примеры генерации
-    print("\nПримеры генерации текста:")
-    test_prompts = [
-        "The future of AI",
-        "I believe that",
-        "In my opinion",
-        "The best thing about"
-    ]
-
-    for prompt in test_prompts:
-        generated = generate_text(trained_model, tokenizer, prompt, device)
-        print(f"  '{prompt}' -> '{generated}'")
-
-
-
-
+    for key, value in results.items():
+        print(f"{key}: {value:.4f}")
