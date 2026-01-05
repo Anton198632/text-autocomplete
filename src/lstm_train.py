@@ -1,9 +1,11 @@
 import torch
-from torch import nn, optim
+from torch import nn, optim, no_grad, argmax
 from tqdm import tqdm
 
 from src.data_utils import split_text_3_4
-from src.eval_lstm import generate_and_evaluate, generate_text
+from src.eval_lstm import generate_and_evaluate, generate_text, \
+    evaluate_with_rouge
+from src.metric import compute_rouge
 from src.train_history import TrainHistory
 
 
@@ -44,7 +46,14 @@ def train_model_with_rouge(
         prompts.append(split_data['prompt'])
         references.append(split_data['target'])
 
+    # Списки для накопления предсказаний и таргетов для ROUGE
+    train_predictions = []
+    train_references = []
+
     for epoch in range(num_epochs):
+        # Режим обучения
+        model.train()
+
         epoch_train_loss = 0
         total_train_tokens = 0
 
@@ -54,9 +63,6 @@ def train_model_with_rouge(
         )
 
         for batch_idx, batch in enumerate(train_pbar):
-            # Режим обучения
-            model.train()
-
             global_step += 1
 
             # Перенос данных
@@ -90,6 +96,25 @@ def train_model_with_rouge(
             epoch_train_loss += batch_loss * batch_size
             total_train_tokens += batch_tokens
 
+            # Сохраняем предсказания для ROUGE (только для последнего токена)
+            # Сохраняем каждые 10 батчей для экономии памяти
+            if batch_idx % 10 == 0:
+                with no_grad():
+                    # Предсказываем следующий токен
+                    predicted_ids = argmax(logits, dim=-1)
+
+                    # Берем 2 примера из батча
+                    for i in range(min(2, batch_size)):
+                        # Берем последний предсказанный токен
+                        pred_seq = predicted_ids[i]
+                        ref_seq = labels[i]
+
+                        # Фильтруем padding токены
+                        mask = ref_seq != -100
+                        if mask.sum() > 0:
+                            train_predictions.append(pred_seq[mask])
+                            train_references.append(ref_seq[mask])
+
             # Обновляем прогресс-бар
             avg_batch_loss = epoch_train_loss / ((batch_idx + 1) * batch_size)
             train_pbar.set_postfix({
@@ -100,24 +125,35 @@ def train_model_with_rouge(
 
             # Промежуточное вычисление ROUGE
             if global_step % eval_every == 0:
-                results = generate_and_evaluate(
-                    model, tokenizer, prompts, references, device, silent=True,
-                )
+                # Вычисляем ROUGE на тренировочной выборке
+                if len(train_predictions) > 0:
+                    train_rouge = compute_rouge(
+                        train_predictions, train_references, tokenizer,
+                    )
 
-                history.train_rouge.append(results)
-                history.train_loss.append(avg_batch_loss)
+                    # Сохраняем историю
+                    history.train_loss.append(avg_batch_loss)
+                    history.train_rouge.append(train_rouge)
+                    history.learning_rate.append(
+                        optimizer.param_groups[0]['lr']
+                    )
 
         # Конец эпохи - полная валидация
         print(f"\n{'=' * 60}")
         print(f"Epoch {epoch + 1}/{num_epochs} завершена")
 
         # Полная валидация
-        results = generate_and_evaluate(
-            model, tokenizer, prompts, references, device,
+        val_loss, val_rouge = evaluate_with_rouge(
+            model, val_dataloader, tokenizer, device, criterion
         )
-        for key, value in results.items():
-            print(f"{key}: {value:.4f}")
 
+        avg_train_loss = epoch_train_loss / len(train_dataloader.dataset)
+
+        print(f"\nTrain Loss: {avg_train_loss:.4f}")
+        print(f"Val Loss: {val_loss:.4f}")
+        print(f"Val ROUGE-1: {val_rouge['rouge1']:.3f}")
+        print(f"Val ROUGE-2: {val_rouge['rouge2']:.3f}")
+        print(f"Val ROUGE-L: {val_rouge['rougeL']:.3f}")
         print(f"{'=' * 60}\n")
 
         # Генерация примеров
