@@ -32,7 +32,7 @@ def compute_rouge(predictions, references, tokenizer):
     avg_scores = {
         'rouge1': np.mean(rouge_scores['rouge1']),
         'rouge2': np.mean(rouge_scores['rouge2']),
-        'rougeL': np.mean(rouge_scores['rougeL'])
+        'rougeL': np.mean(rouge_scores['rougeL']),
     }
 
     return avg_scores

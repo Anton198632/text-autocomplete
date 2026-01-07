@@ -1,10 +1,9 @@
 import torch
-from torch import nn, optim, no_grad, argmax
+from torch import argmax, nn, no_grad, optim
 from tqdm import tqdm
 
 from src.data_utils import split_text_3_4
-from src.eval_lstm import generate_and_evaluate, generate_text, \
-    evaluate_with_rouge
+from src.eval_lstm import evaluate_with_rouge, generate_text
 from src.metric import compute_rouge
 from src.train_history import TrainHistory
 
@@ -135,7 +134,7 @@ def train_model_with_rouge(
                     history.train_loss.append(avg_batch_loss)
                     history.train_rouge.append(train_rouge)
                     history.learning_rate.append(
-                        optimizer.param_groups[0]['lr']
+                        optimizer.param_groups[0]['lr'],
                     )
 
         # Конец эпохи - полная валидация
@@ -144,7 +143,7 @@ def train_model_with_rouge(
 
         # Полная валидация
         val_loss, val_rouge = evaluate_with_rouge(
-            model, val_dataloader, tokenizer, device, criterion
+            model, val_dataloader, tokenizer, device, criterion,
         )
 
         avg_train_loss = epoch_train_loss / len(train_dataloader.dataset)

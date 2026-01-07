@@ -73,7 +73,7 @@ def generate_and_evaluate(
             )
 
             result_texts.append(
-                f"'{prompt}' -> '{prompt} {generated_text}'"
+                f"'{prompt}' -> '{prompt} {generated_text}'",
             )
 
             all_predictions.append(generated_text)
@@ -100,9 +100,8 @@ def evaluate_with_rouge(model, dataloader, tokenizer, device, criterion):
     all_references = []
 
     with torch.no_grad():
-        for batch in tqdm(dataloader, desc="Evaluation", leave=False):
+        for batch in tqdm(dataloader, desc='Evaluation', leave=False):
             input_ids = batch['input_ids'].to(device)
-            attention_mask = batch['attention_mask'].to(device)
             labels = batch['labels'].to(device)
 
             # Forward pass
@@ -112,7 +111,7 @@ def evaluate_with_rouge(model, dataloader, tokenizer, device, criterion):
             # Вычисляем потери
             loss = criterion(
                 logits.view(-1, vocab_size),
-                labels.view(-1)
+                labels.view(-1),
             )
 
             total_loss += loss.item() * batch_size
