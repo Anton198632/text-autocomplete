@@ -9,13 +9,14 @@ from eval_lstm import generate_and_evaluate
 
 model_name = 'distilgpt2'
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 tokenizer.add_special_tokens({'pad_token': '[PAD]'})
 
 model = AutoModelForCausalLM.from_pretrained(model_name)
-
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+model.to(device)
+model.eval() 
 
 print('Загрузка тестового датасета...')
 test_data = pd.read_csv('../data/test.csv')
